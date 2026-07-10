@@ -1,0 +1,9 @@
+# Excel temporary files
+~$*.xlsx
+~$*.xls
+
+# R user files / history
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
