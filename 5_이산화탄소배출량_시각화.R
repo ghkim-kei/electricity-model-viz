@@ -245,20 +245,30 @@ if (length(breaks) < 6) {
   breaks <- seq(min(df_country_co2_2023$CO2_Mt, na.rm=TRUE), max(df_country_co2_2023$CO2_Mt, na.rm=TRUE), length.out=6)
 }
 
+# 분위 구간 경계값 기준 실제 절대값 범위 라벨 생성
+labels <- c(
+  sprintf("5단계 (%.1f Mt 이하)", breaks[2]),
+  sprintf("4단계 (%.1f ~ %.1f Mt)", breaks[2], breaks[3]),
+  sprintf("3단계 (%.1f ~ %.1f Mt)", breaks[3], breaks[4]),
+  sprintf("2단계 (%.1f ~ %.1f Mt)", breaks[4], breaks[5]),
+  sprintf("1단계 (%.1f Mt 이상)", breaks[5])
+)
+
 world_energy$level <- cut(
   world_energy$CO2_Mt, 
   breaks = breaks,
-  labels = c("5단계 (하위 10% 이하)", "4단계 (하위 10% ~ 30%)", "3단계 (중간 30% ~ 70%)", "2단계 (상위 10% ~ 30%)", "1단계 (상위 10% 이상)"),
+  labels = labels,
   include.lowest = TRUE
 )
 
 co2_map_colors <- c(
-  "5단계 (하위 10% 이하)" = "#FEE5D9",
-  "4단계 (하위 10% ~ 30%)" = "#FCAE91",
-  "3단계 (중간 30% ~ 70%)" = "#FB6A4A",
-  "2단계 (상위 10% ~ 30%)" = "#DE2D26",
-  "1단계 (상위 10% 이상)" = "#A50F15"
+  "#FEE5D9",
+  "#FCAE91",
+  "#FB6A4A",
+  "#DE2D26",
+  "#A50F15"
 )
+names(co2_map_colors) <- labels
 
 p2_map <- ggplot(data = world_energy) +
   geom_sf(aes(fill = level), color = "#FFFFFF", linewidth = 0.1) +
@@ -282,100 +292,11 @@ ggsave(file.path(fig_dir, "5-2)전세계 국가별 이산화탄소 배출 수준
 
 
 # ==============================================================================
-# [5-3. 배출 증감량] 2017년 대비 2023년 국가(그룹)별 이산화탄소 배출량 증감량 (연료원별 양방향 누적)
-# --- [5-3. 배출 증감량] 핵심 분석 및 연산 로직: 2017년과 2023년의 그룹별 연료원 배출량 차이를 구하여 전세계 총합(WORLD)을 포함한 순(Net) 증감량 분석 ---
-# ==============================================================================
-cat("5-3) CO2 증감량 막대그래프 생성 중...\n")
-df_change_fuel <- merge(
-  df_emissions_fuel_2017,
-  df_emissions_fuel_2023,
-  by = c("Group", "tech"),
-  suffixes = c("_2017", "_2023")
-)
-df_change_fuel$Change_Mt <- df_change_fuel$CO2_Mt_2023 - df_change_fuel$CO2_Mt_2017
-
-# 전세계(WORLD) 증감량 행 생성
-world_fuel_change <- aggregate(cbind(CO2_Mt_2017, CO2_Mt_2023, Change_Mt) ~ tech, data = df_change_fuel, FUN = sum)
-world_fuel_change$Group <- "WORLD"
-df_change_fuel <- rbind(df_change_fuel, world_fuel_change[, colnames(df_change_fuel)])
-df_change_fuel <- merge(df_change_fuel, rbind(geo_names, data.frame(Group="WORLD", Name="전세계")), by = "Group")
-
-df_net_change <- aggregate(Change_Mt ~ Group + Name, data = df_change_fuel, FUN = sum)
-df_net_change$Abs_Net_Change <- abs(df_net_change$Change_Mt)
-df_net_change$Abs_Net_Change[df_net_change$Group == "WORLD"] <- 999999
-
-sorted_groups_c2 <- df_net_change$Name[order(df_net_change$Abs_Net_Change)]
-df_change_fuel$Name <- factor(df_change_fuel$Name, levels = sorted_groups_c2)
-df_net_change$Name <- factor(df_net_change$Name, levels = sorted_groups_c2)
-
-df_change_fuel$tech_ko <- factor(
-  ifelse(df_change_fuel$tech == "coal", "석탄 (Coal)",
-         ifelse(df_change_fuel$tech == "lng", "가스 (LNG)",
-                ifelse(df_change_fuel$tech == "oil", "석유 (Oil)", "바이오/폐기물"))),
-  levels = c("석탄 (Coal)", "가스 (LNG)", "석유 (Oil)", "바이오/폐기물")
-)
-
-# 텍스트 범례 위치 지정을 위한 그룹별 증가분 및 감소분 합산
-sum_pos_df <- aggregate(Change_Mt ~ Group, data = df_change_fuel[df_change_fuel$Change_Mt > 0, ], FUN = sum, na.rm = TRUE)
-colnames(sum_pos_df)[2] <- "Sum_Pos"
-
-sum_neg_df <- aggregate(Change_Mt ~ Group, data = df_change_fuel[df_change_fuel$Change_Mt < 0, ], FUN = sum, na.rm = TRUE)
-colnames(sum_neg_df)[2] <- "Sum_Neg"
-
-df_net_change <- merge(df_net_change, sum_pos_df, by = "Group", all.x = TRUE)
-df_net_change$Sum_Pos[is.na(df_net_change$Sum_Pos)] <- 0
-
-df_net_change <- merge(df_net_change, sum_neg_df, by = "Group", all.x = TRUE)
-df_net_change$Sum_Neg[is.na(df_net_change$Sum_Neg)] <- 0
-
-df_net_change$x_pos <- df_net_change$Change_Mt
-df_net_change$hjust_val <- ifelse(df_net_change$Change_Mt >= 0, -0.15, 1.15)
-
-# 미국(USA)의 경우 텍스트 라벨 겹침 방지를 위해 출력 위치 조정
-df_net_change$x_pos[df_net_change$Group == "USA"] <- df_net_change$Sum_Pos[df_net_change$Group == "USA"]
-df_net_change$hjust_val[df_net_change$Group == "USA"] <- -0.15
-
-df_net_change$Name <- factor(df_net_change$Name, levels = sorted_groups_c2)
-
-p3_div <- ggplot(df_change_fuel, aes(x = Change_Mt, y = Name, fill = tech_ko)) +
-  geom_vline(xintercept = 0, color = "#555555", linewidth = 0.5) +
-  geom_col(width = 0.65, color = "#FFFFFF", linewidth = 0.1) +
-  geom_text(
-    data = df_net_change,
-    aes(x = x_pos, y = Name, label = paste0(ifelse(Change_Mt >= 0, "+", ""), round(Change_Mt, 1), " Mt"), hjust = hjust_val),
-    size = 3.0,
-    fontface = "bold",
-    inherit.aes = FALSE
-  ) +
-  scale_fill_manual(values = coal_colors, name = "발전연료원") +
-  theme_minimal() +
-  scale_x_continuous(expand = expansion(mult = c(0.15, 0.15))) +
-  labs(
-    title = "2017년 대비 2023년 국가(그룹)별 이산화탄소(CO2) 배출 연료원별 양방향 증감 (Mt)",
-    subtitle = "막대의 성분은 연료원별 배출량 증감을 나타내며, 텍스트 라벨은 순(Net) 증감량을 나타냄",
-    x = "이산화탄소 증감량 (Mt)",
-    y = "국가 (그룹)",
-    caption = "데이터 기준: input_DB_2025_v.13_2(송부용).xlsx"
-  ) +
-  theme(
-    plot.title = element_text(face = "bold", size = 13, hjust = 0.5, margin = margin(t = 15, b = 5)),
-    plot.subtitle = element_text(size = 9, hjust = 0.5, color = "#555555", margin = margin(b = 15)),
-    axis.text.y = element_text(face = "bold", size = 9, color = "#333333"),
-    axis.text.x = element_text(size = 8, color = "#333333"),
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank(),
-    legend.position = "bottom"
-  )
-
-ggsave(file.path(fig_dir, "5-3)2017년 대비 2023년 국가(그룹)별 이산화탄소 배출량 증감량.png"), plot = p3_div, width = 11, height = 7, dpi = 300)
-
-
-# ==============================================================================
-# [5-4. 배출규모 점유율] 2017년 & 2023년 글로벌 발전 부문 이산화탄소 배출량 국가별 점유 비중 트리맵
-# --- [5-4. 배출규모 점유율] 핵심 분석 및 연산 로직: 국가별 배출량 점유율(%)을 구하고 소수 첫째 자리 반올림 기준값에 맞게 대형(10% 이상), 중형(2%~10%), 소형(2% 미만)으로 분류 분석 ---
+# [5-3. 배출규모 점유율] 2017년 & 2023년 글로벌 발전 부문 이산화탄소 배출량 국가별 점유 비중 트리맵
+# --- [5-3. 배출규모 점유율] 핵심 분석 및 연산 로직: 국가별 배출량 점유율(%)을 구하고 소수 첫째 자리 반올림 기준값에 맞게 대형(10% 이상), 중형(2%~10%), 소형(2% 미만)으로 분류 분석 ---
 # ==============================================================================
 generate_co2_treemap <- function(year, total_co2_data) {
-  cat(sprintf("Generating 5-4) %d CO2 Share Treemap...\n", year))
+  cat(sprintf("Generating 5-3) %d CO2 Share Treemap...\n", year))
   df_tree <- merge(total_co2_data, geo_names, by = "Group")
   df_tree$Share <- (df_tree$CO2_Mt / sum(df_tree$CO2_Mt)) * 100
   df_tree$Share_Label <- round(df_tree$Share, 1)
@@ -412,7 +333,7 @@ generate_co2_treemap <- function(year, total_co2_data) {
       legend.position = "bottom"
     )
   
-  ggsave(file.path(fig_dir, sprintf("5-4) %d년 글로벌 발전 부문 이산화탄소 배출량 국가별 점유 비중.png", year)), 
+  ggsave(file.path(fig_dir, sprintf("5-3) %d년 글로벌 발전 부문 이산화탄소 배출량 국가별 점유 비중.png", year)), 
          plot = p4, width = 10, height = 7.5, dpi = 300)
 }
 

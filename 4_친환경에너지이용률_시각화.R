@@ -100,16 +100,27 @@ generate_cf_map <- function(tech_col, title_prefix, colors_map, legend_name, fil
   breaks[1] <- breaks[1] - 0.0001
   breaks[length(breaks)] <- breaks[length(breaks)] + 0.0001
   
+  cf_labels <- c(
+    sprintf("5단계 (%.1f%% 이하)", breaks[2]),
+    sprintf("4단계 (%.1f%% ~ %.1f%%)", breaks[2], breaks[3]),
+    sprintf("3단계 (%.1f%% ~ %.1f%%)", breaks[3], breaks[4]),
+    sprintf("2단계 (%.1f%% ~ %.1f%%)", breaks[4], breaks[5]),
+    sprintf("1단계 (%.1f%% 이상)", breaks[5])
+  )
+  
   world_energy$level <- cut(
     world_energy[[paste0(tech_col, "_Pct")]], 
     breaks = breaks,
-    labels = c("5단계 (하위 10% 이하)", "4단계 (하위 10% ~ 30%)", "3단계 (중간 30% ~ 70%)", "2단계 (상위 10% ~ 30%)", "1단계 (상위 10% 이상)"),
+    labels = cf_labels,
     include.lowest = TRUE
   )
   
+  map_colors <- colors_map
+  names(map_colors) <- cf_labels
+  
   p_map <- ggplot(data = world_energy) +
     geom_sf(aes(fill = level), color = "#FFFFFF", linewidth = 0.1) +
-    scale_fill_manual(values = colors_map, na.value = "grey90", name = legend_name) +
+    scale_fill_manual(values = map_colors, na.value = "grey90", name = legend_name) +
     theme_minimal() +
     labs(
       title = sprintf("전세계 국가별 %s 평균이용률 수준 단계구분도 (5단계)", title_prefix),

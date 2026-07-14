@@ -135,20 +135,30 @@ if (length(breaks) < 6) {
   breaks <- seq(min(country_total$Demand_TWh, na.rm=TRUE), max(country_total$Demand_TWh, na.rm=TRUE), length.out=6)
 }
 
+# 분위 구간 경계값 기준 실제 절대값 범위 라벨 생성
+labels <- c(
+  sprintf("5단계 (%.1f TWh 이하)", breaks[2]),
+  sprintf("4단계 (%.1f ~ %.1f TWh)", breaks[2], breaks[3]),
+  sprintf("3단계 (%.1f ~ %.1f TWh)", breaks[3], breaks[4]),
+  sprintf("2단계 (%.1f ~ %.1f TWh)", breaks[4], breaks[5]),
+  sprintf("1단계 (%.1f TWh 이상)", breaks[5])
+)
+
 world_energy$level <- cut(
   world_energy$Demand_TWh, 
   breaks = breaks,
-  labels = c("5단계 (하위 10% 이하)", "4단계 (하위 10% ~ 30%)", "3단계 (중간 30% ~ 70%)", "2단계 (상위 10% ~ 30%)", "1단계 (상위 10% 이상)"),
+  labels = labels,
   include.lowest = TRUE
 )
 
 demand_colors <- c(
-  "5단계 (하위 10% 이하)" = "#F7FBFF",
-  "4단계 (하위 10% ~ 30%)" = "#DEEBF7",
-  "3단계 (중간 30% ~ 70%)" = "#9ECAE1",
-  "2단계 (상위 10% ~ 30%)" = "#4292C6",
-  "1단계 (상위 10% 이상)" = "#08306B"
+  "#F7FBFF",
+  "#DEEBF7",
+  "#9ECAE1",
+  "#4292C6",
+  "#08306B"
 )
+names(demand_colors) <- labels
 
 p_map <- ggplot(data = world_energy) +
   geom_sf(aes(fill = level), color = "#FFFFFF", linewidth = 0.1) +
