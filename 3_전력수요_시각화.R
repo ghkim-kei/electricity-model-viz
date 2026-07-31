@@ -73,12 +73,11 @@ for (yr in as.character(2017:2023)) {
 
 # ==============================================================================
 # [3-1] 2023년 국가(그룹)별 연간 전력수요량 (TWh) - 바차트 정렬
-# --- [3-1. 총전력수요] 핵심 분석 및 연산 로직: GWh 단위인 연간 전력수요량을 1,000으로 나누어 TWh 단위로 환산 및 합산 분석 ---
+# --- [3-1. 총전력수요] 핵심 분석 및 연산 로직: TWh 단위인 연간 전력수요량 데이터를 합산 분석 ---
 # ==============================================================================
 cat("Generating 3-1) Demand Group Bar Chart...\n")
 dem_2023_g <- aggregate(df_dem[["2023"]], by = list(Group = df_dem$Group), FUN = sum, na.rm = TRUE)
-colnames(dem_2023_g)[2] <- "Demand_GWh"
-dem_2023_g$Demand_TWh <- dem_2023_g$Demand_GWh / 1000
+colnames(dem_2023_g)[2] <- "Demand_TWh"
 
 # Merge Korean Names
 dem_2023_g <- merge(dem_2023_g, geo_names, by = "Group")
@@ -95,7 +94,7 @@ p_bar <- ggplot(dem_2023_g, aes(x = Demand_TWh, y = Name)) +
   scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
   labs(
     title = "2023년 국가(그룹)별 연간 전력수요량 (TWh)",
-    subtitle = "각 국가(그룹)별 2023년 연간 총 전력소비량 대조 (GWh -> TWh 환산)",
+    subtitle = "각 국가(그룹)별 2023년 연간 총 전력소비량 대조 (TWh)",
     x = "전력수요량 (TWh)",
     y = "국가 (그룹)",
     caption = "데이터 기준: input_DB_2025_v.13_2(송부용).xlsx"
@@ -120,8 +119,7 @@ ggsave(file.path(fig_dir, "3-1)2023년 국가(그룹)별 연간 전력수요량 
 # ==============================================================================
 cat("3-2) 5단계 전력수요 단계구분도 생성 중...\n")
 country_total <- aggregate(df_dem[["2023"]], by = list(code = df_dem$code), FUN = sum, na.rm = TRUE)
-colnames(country_total)[2] <- "Demand_GWh"
-country_total$Demand_TWh <- country_total$Demand_GWh / 1000
+colnames(country_total)[2] <- "Demand_TWh"
 
 # 세계 지형 경계 데이터 로드
 world <- ne_countries(scale = "medium", returnclass = "sf")
