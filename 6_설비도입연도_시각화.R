@@ -48,6 +48,13 @@ tech_colors <- c(
   "Oil" = "#8B5A2B"          # Brown
 )
 
+# 발전기술원 영문-한글 라벨 매핑 (범례 한글 표기용) 및 한글 키 색상 벡터
+tech_ko_labels <- c(
+  "Coal" = "석탄", "LNG" = "LNG", "Nuclear" = "원자력", "Solar" = "태양광",
+  "WindOn" = "육상풍력", "WindOff" = "해상풍력", "Oil" = "석유"
+)
+tech_colors_ko <- setNames(tech_colors, unname(tech_ko_labels[names(tech_colors)]))
+
 # 발전설비 도입연도(capacity_vintage) 시트 로드
 df_vin <- readWorkbook(file_path, sheet = "capacity_vintage", startRow = 2)
 colnames(df_vin) <- trimws(colnames(df_vin))
@@ -88,10 +95,13 @@ generate_vintage_chart <- function(long_df, title_txt, subtitle_txt, file_name) 
   long_df <- long_df[long_df$Capacity_GW > 0, ]
   long_df$Group <- factor(long_df$Group, levels = groups_order)
 
-  p <- ggplot(long_df, aes(x = factor(Year), y = Capacity_GW, fill = Group)) +
+  # 연속형(Year) x축 사용: 설치 실적이 없는 연도도 실제 간격만큼 빈 공간으로 표시됨
+  # (factor(Year) + scale_x_discrete를 쓰면 결측 연도가 축에서 통째로 사라져 연도 간격이 왜곡됨)
+  # X축 시작점은 차트마다 다르게(첫 도입연도 기준) 두지 않고 1950년으로 전체 통일 (8/19 회의 결정)
+  p <- ggplot(long_df, aes(x = Year, y = Capacity_GW, fill = Group)) +
     geom_col(width = 0.75) +
     scale_fill_manual(values = group_colors, name = "국가(그룹)") +
-    scale_x_discrete(breaks = as.character(seq(1940, 2024, by = 2))) +
+    scale_x_continuous(breaks = seq(1950, 2024, by = 2), limits = c(1949, 2025)) +
     theme_minimal() +
     labs(
       title = title_txt,
@@ -126,15 +136,18 @@ build_vintage_long_by_tech <- function(df_country, year_cols) {
   do.call(rbind, long_list)
 }
 
-# 개별 국가용 설비도입연도 누적 막대그래프 생성 함수 (발전기술원별 색상)
+# 개별 국가용 설비도입연도 누적 막대그래프 생성 함수 (발전기술원별 색상, 범례 한글 표기)
 generate_vintage_chart_by_tech <- function(long_df, title_txt, subtitle_txt, file_name) {
   long_df <- long_df[long_df$Capacity_GW > 0, ]
-  long_df$tech <- factor(long_df$tech, levels = names(tech_colors))
+  long_df$tech_ko <- tech_ko_labels[as.character(long_df$tech)]
+  long_df$tech_ko <- factor(long_df$tech_ko, levels = unname(tech_ko_labels[names(tech_colors)]))
 
-  p <- ggplot(long_df, aes(x = factor(Year), y = Capacity_GW, fill = tech)) +
+  # 연속형(Year) x축 사용: 설치 실적이 없는 연도도 실제 간격만큼 빈 공간으로 표시됨
+  # X축 시작점은 차트마다 다르게(첫 도입연도 기준) 두지 않고 1950년으로 전체 통일 (8/19 회의 결정)
+  p <- ggplot(long_df, aes(x = Year, y = Capacity_GW, fill = tech_ko)) +
     geom_col(width = 0.75) +
-    scale_fill_manual(values = tech_colors, name = "발전기술원") +
-    scale_x_discrete(breaks = as.character(seq(1940, 2024, by = 2))) +
+    scale_fill_manual(values = tech_colors_ko, name = "발전기술원") +
+    scale_x_continuous(breaks = seq(1950, 2024, by = 2), limits = c(1949, 2025)) +
     theme_minimal() +
     labs(
       title = title_txt,
@@ -203,6 +216,7 @@ generate_vintage_chart(
 # ==============================================================================
 # [6-4] 한국의 기술별 설비도입연도 (GW) - 특정 국가 샘플
 # --- [6-4. 설비도입연도 - 국가별 샘플] 핵심 분석 및 연산 로직: 특정 국가(KOR)의 설비도입연도별 설비용량(GW)을 발전기술원 단위로 합산하여 분석 ---
+# 범위: capacity_vintage 시트에 있는 발전기술원 7종(석탄/LNG/원자력/태양광/육상풍력/해상풍력/석유) 전체 포함 (8/19 회의 결정: 신재생 포함이 낫다는 의견)
 # ==============================================================================
 cat("Generating 6-4) Korea Vintage-Year Chart (by tech)...\n")
 df_kor <- df_vin[df_vin$Group == "KOR", ]
@@ -214,4 +228,18 @@ generate_vintage_chart_by_tech(
   "6-4)한국의 기술별 설비도입연도 (GW).png"
 )
 
-cat("SUCCESS: All 4 Capacity Vintage-Year visualizations generated successfully.\n")
+# ==============================================================================
+# [6-5] 전세계의 기술별 설비도입연도 (GW) - 글로벌 확장
+# --- [6-5. 설비도입연도 - 글로벌] 핵심 분석 및 연산 로직: 6-4와 동일한 로직을 국가 필터 없이 전세계(전체 국가·그룹) 대상으로 확장하여, 설비도입연도별 설비용량(GW)을 발전기술원 단위로 합산하여 분석 ---
+# 범위: capacity_vintage 시트에 있는 발전기술원 7종(석탄/LNG/원자력/태양광/육상풍력/해상풍력/석유) 전체 포함
+# ==============================================================================
+cat("Generating 6-5) World Vintage-Year Chart (by tech)...\n")
+long_world <- build_vintage_long_by_tech(df_vin, year_cols)
+generate_vintage_chart_by_tech(
+  long_world,
+  "전세계의 기술별 설비도입연도 (GW)",
+  "설비도입연도별 전세계 발전설비 용량을 발전기술원 단위로 누적 표시",
+  "6-5)전세계의 기술별 설비도입연도 (GW).png"
+)
+
+cat("SUCCESS: All 5 Capacity Vintage-Year visualizations generated successfully.\n")
